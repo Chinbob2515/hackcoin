@@ -27,6 +27,9 @@ class Node(HashMixin):
 
 	hash_fields = ['initial', 'time', 'predecessor_id']
 
+	# defines whether or not this block is a valid part of the block chain
+	constituent = models.BooleanField(default=False)
+
 	def save(self, *args, **kwargs):
 
 		super().save(*args, **kwargs)
@@ -35,7 +38,15 @@ class Node(HashMixin):
 
 class Transaction(HashMixin):
 
-	time = models.DateTimeField()
+	class TransactionType(models.IntegerChoices):
+		MINED = (0, 'Mined')
+		TRANSFER = (1, 'Transfer')
+
+	type = models.IntegerField(
+		choices = TransactionType.choices
+	)
+
+	block_order = models.IntegerField(null=True, blank=True)
 
 	owner = models.ForeignKey(
 		'Node',
@@ -43,4 +54,27 @@ class Transaction(HashMixin):
 		related_name='transactions'
 	)
 
-	hash_fields = ['time', 'owner']
+	# the only person that needs to sign this is the person who is transferring the money
+	signed_one = models.CharField(max_length=512, null=True, blank=True)
+
+	# public keys identifying the actors
+	source = models.CharField(max_length=256, null=True, blank=True)
+	desination = models.CharField(max_length=256)
+
+	value = models.FloatField()
+
+	hash_fields = ['block_order', 'owner_id', 'value']
+
+
+def get_wallet_value(public_key):
+
+	out  = Transaction.objects.filter(owner__constituent=True, source=public_key)
+	into = Transaction.objects.filter(owner__constituent=True, destination=public_key)
+
+	total = 0
+	for transaction in out:
+		total -= transaction.value
+	for transaction in into:
+		total += transaction.value
+
+	return total
